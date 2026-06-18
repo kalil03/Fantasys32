@@ -1,0 +1,10 @@
+# Artefatos de build
+*.o
+*.bin
+
+# Executáveis gerados
+vm/vm
+assembler_src/assembler
+
+# Diversos
+.DS_Store
