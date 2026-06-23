@@ -21,11 +21,10 @@ constexpr int VIDEO_LARG = 320;
 constexpr int VIDEO_ALT  = 240;
 constexpr int FRAMEBUFFER_PIXELS = VIDEO_LARG * VIDEO_ALT;
 
-// Tempo: a tela é atualizada a 60 frames por segundo (FPS). INSTR_POR_FRAME é
-// quantas instruções rodam a cada frame; usamos um valor folgado para o jogo
-// ficar fluido — a pausa real do jogo é controlada pela instrução SLEEP.
-constexpr int FPS                = 60;   // frames por segundo
-constexpr int INSTR_POR_FRAME    = 50000;
+// Clock da VM (conforme a especificação): 60 ciclos por segundo, executando
+// 104 instruções por ciclo. A tela é redesenhada a cada ciclo (60x por segundo).
+constexpr int FPS                = 60;   // ciclos por segundo
+constexpr int INSTR_POR_FRAME    = 104;  // instruções por ciclo
 
 // A classe representa todo o estado da máquina virtual.
 class VM {
