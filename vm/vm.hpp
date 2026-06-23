@@ -21,10 +21,10 @@ constexpr int VIDEO_LARG = 320;
 constexpr int VIDEO_ALT  = 240;
 constexpr int FRAMEBUFFER_PIXELS = VIDEO_LARG * VIDEO_ALT;
 
-// Tempo: 60 FPS. Quantas instruções rodam por frame. A especificação é ambígua
-// (cita "104"); usamos um valor folgado para que o jogo seja fluido — a pausa
-// real é controlada pela instrução SLEEP. Fácil de ajustar aqui.
-constexpr int FPS                = 60;
+// Tempo: a tela é atualizada a 60 frames por segundo (FPS). INSTR_POR_FRAME é
+// quantas instruções rodam a cada frame; usamos um valor folgado para o jogo
+// ficar fluido — a pausa real do jogo é controlada pela instrução SLEEP.
+constexpr int FPS                = 60;   // frames por segundo
 constexpr int INSTR_POR_FRAME    = 50000;
 
 // A classe representa todo o estado da máquina virtual.

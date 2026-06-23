@@ -1,9 +1,11 @@
 ; Fantasys32 - Snake simples
 ; Objetivo: comer a comida vermelha, crescer e evitar parede/corpo.
 ;
-; Controles esperados pela VM:
-;   KEY_UP=0, KEY_DOWN=1, KEY_LEFT=2, KEY_RIGHT=3, KEY_SPACE=4
-; Se o mapeamento da VM ficar diferente, altere apenas os .equ KEY_*.
+; Controles (mapa de teclas da VM, conforme a especificação):
+;   KEY_LEFT=0, KEY_RIGHT=1, KEY_UP=2, KEY_DOWN=3, KEY_SPACE=4
+;
+; NOTA SOBRE ADDI: no assembler, "ADDI A, B, imm" gera B = A + imm
+; (o destino é o SEGUNDO operando, igual a LOAD/STORE onde a base vem primeiro).
 
 .data
 .equ KEY_LEFT, 0
@@ -147,7 +149,7 @@ TRY_UP:
     STORE R3, R4, 0
     MOVL R3, dir_y.l
     MOVH R3, dir_y.h
-    ADDI R4, R0, -1
+    ADDI R0, R4, -1
     STORE R3, R4, 0
     RET
 
@@ -155,7 +157,7 @@ TRY_DOWN:
     MOVL R3, dir_y.l
     MOVH R3, dir_y.h
     LOAD R3, R4, 0
-    ADDI R5, R0, -1
+    ADDI R0, R5, -1
     BEQ R4, R5, END_READ_INPUT
     MOVL R3, dir_x.l
     MOVH R3, dir_x.h
@@ -175,7 +177,7 @@ TRY_LEFT:
     BEQ R4, R5, END_READ_INPUT
     MOVL R3, dir_x.l
     MOVH R3, dir_x.h
-    ADDI R4, R0, -1
+    ADDI R0, R4, -1
     STORE R3, R4, 0
     MOVL R3, dir_y.l
     MOVH R3, dir_y.h
@@ -187,7 +189,7 @@ TRY_RIGHT:
     MOVL R3, dir_x.l
     MOVH R3, dir_x.h
     LOAD R3, R4, 0
-    ADDI R5, R0, -1
+    ADDI R0, R5, -1
     BEQ R4, R5, END_READ_INPUT
     MOVL R3, dir_x.l
     MOVH R3, dir_x.h
@@ -304,11 +306,11 @@ NO_EAT:
 
 SHIFT_BODY:
     ; Desloca corpo do fim para o inicio: pos[i] = pos[i - 1].
-    ADDI R6, R5, -1
+    ADDI R5, R6, -1
 
 SHIFT_LOOP:
     BLE R6, R0, WRITE_HEAD
-    ADDI R7, R6, -1
+    ADDI R6, R7, -1
     MOVL R8, 4
     MUL R9, R7, R8
     MUL R10, R6, R8
