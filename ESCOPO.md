@@ -11,8 +11,7 @@ ideias e decidir o que faremos. Meta: código **simples, funcional e que eu ente
 Duas entregas:
 
 1. **VM** (Máquina Virtual) em **C++** — executa o `.bin` gerado pelo assembler.
-2. **Jogo** em Assembly Fantasys32 — clone de um clássico (Snake, Space Invaders,
-   Flappy Bird, Breakout, Frogger ou Combat).
+2. **Jogo** em Assembly Fantasys32 — clone do clássico Snake.
 
 O **assembler já foi fornecido** pelo professor (`assembler_src/`). Não precisamos
 implementá-lo, só saber usá-lo (`.asm` → `.bin`).
@@ -126,20 +125,21 @@ Cada fase entrega algo testável. Só passar para a próxima quando a atual func
 - [x] PUSH/POP/INC/DEC/NOT + checagem de stack overflow/underflow.
 - [x] Teste `teste_fase2.asm`: loop com branch, PUSH/POP, CALL/RET, NOT (R3=30, SP balanceado).
 
-### Fase 3 — Vídeo e loop principal
-- Janela SDL2 + textura framebuffer + escala (`--scale`).
-- Loop 60 FPS executando 104 instruções/frame.
-- CLEAR, RECT; HALT encerra limpo.
-- Teste: desenhar retângulos na tela.
+### Fase 3 — Vídeo e loop principal ✅
+- [x] Janela SDL2 + textura framebuffer + escala (`--scale`).
+- [x] Loop 60 FPS; instruções/frame em constante `INSTR_POR_FRAME` (spec "104" é ambígua).
+- [x] CLEAR, RECT; HALT encerra limpo.
 
-### Fase 4 — Entrada e temporização
-- Mapeamento das 16 teclas → GKEY; SLEEP; FRAMENUM.
-- Teste: mover um retângulo com as setas (estilo `sdl.c`).
+### Fase 4 — Entrada e temporização ✅
+- [x] Mapeamento das 16 teclas → GKEY (segue a spec); SLEEP (não-bloqueante); FRAMENUM.
 
-### Fase 5 — Texto, sprites e extras
-- PSTR/PINT com fonte bitmap (`Px437Acer710CGA.png`), DSPRITE com transparência.
-- RAND/SRAND (LCG), PLAY (áudio não-bloqueante), SYSCALL + `--no-syscall`.
-- **VM completa.**
+### Fase 5 — Texto, sprites e extras ✅
+- [x] PSTR/PINT com fonte bitmap **autoral** 8x8→16x16 (`fonte.hpp`); DSPRITE com transparência.
+- [x] RAND/SRAND (LCG), PLAY (áudio SDL não-bloqueante via fila), SYSCALL + `--no-syscall`.
+- [x] Teste `teste_fase3.asm` headless (RAND em faixa, sem crash). **VM completa.**
+
+> Nota: a fonte é autoral (não usamos o PNG do professor) para evitar dependência
+> de decodificador de imagem e código de terceiros. Minúsculas viram maiúsculas.
 
 ### Fase 6 — Jogo Snake (Assembly)
 - `jogo.asm`: `.data` (grid, cobra, comida, cores) + `.text`.

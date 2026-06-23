@@ -23,10 +23,10 @@ A cabeca fica sempre no indice 0. A cada rodada:
 
 O arquivo assume este mapeamento:
 
-- `KEY_UP = 0`
-- `KEY_DOWN = 1`
-- `KEY_LEFT = 2`
-- `KEY_RIGHT = 3`
+- `KEY_LEFT = 0`
+- `KEY_RIGHT = 1`
+- `KEY_UP = 2`
+- `KEY_DOWN = 3`
 - `KEY_SPACE = 4`
 
 Se a VM usar outro mapeamento, altere apenas os `.equ KEY_*` no inicio de

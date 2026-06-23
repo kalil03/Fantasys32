@@ -45,16 +45,12 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    // (scale e noSyscall serão usados nas próximas fases.)
-    (void)scale;
-    (void)noSyscall;
-
     VM vm;
+    vm.setEscala(scale);
+    vm.setSemSyscall(noSyscall);
     vm.carregarCodigo(arqBin);
 
-    while (vm.rodando()) {
-        vm.executarInstrucao();
-    }
+    vm.executar();
 
     if (debug) {
         vm.imprimirRegistradores();

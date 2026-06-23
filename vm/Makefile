@@ -1,11 +1,9 @@
 # Makefile da VM Fantasys32
-# Compila com g++ (C++17). SDL2 será adicionado a partir da Fase 3.
+# Compila com g++ (C++17) e linka a SDL2.
 
 CXX      = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2
-# Quando o SDL2 entrar (Fase 3), descomentar:
-# LDFLAGS = $(shell sdl2-config --libs)
-# CXXFLAGS += $(shell sdl2-config --cflags)
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 $(shell pkg-config --cflags sdl2)
+LDFLAGS  = $(shell pkg-config --libs sdl2) -lm
 
 ALVO    = vm
 FONTES  = main.cpp vm.cpp
@@ -16,7 +14,7 @@ all: $(ALVO)
 $(ALVO): $(OBJ)
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $(ALVO) $(LDFLAGS)
 
-%.o: %.cpp vm.hpp
+%.o: %.cpp vm.hpp fonte.hpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:

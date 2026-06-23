@@ -86,7 +86,9 @@ make
 - [x] **Fase 0** — Estrutura do projeto e portabilidade para C++
 - [x] **Fase 1** — Núcleo da CPU (aritmética/lógica, MOVL/MOVH, LOAD/STORE)
 - [x] **Fase 2** — Controle de fluxo (branches, JMP/CALL/RET) e pilha
-- [ ] **Fase 3+** — Vídeo, teclado, som, texto/sprites
-- [ ] **Fase 6** — Jogo Snake
+- [x] **Fase 3** — Vídeo (SDL2, framebuffer, loop 60 FPS, CLEAR/RECT)
+- [x] **Fase 4** — Teclado (GKEY), SLEEP, FRAMENUM
+- [x] **Fase 5** — Texto (PSTR/PINT), DSPRITE, RAND, PLAY, SYSCALL — **VM completa**
+- [ ] **Fase 6** — Jogo Snake (ajustes e testes na tela real)
 
 Detalhes em [`ESCOPO.md`](ESCOPO.md).

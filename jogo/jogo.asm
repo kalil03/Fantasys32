@@ -6,10 +6,10 @@
 ; Se o mapeamento da VM ficar diferente, altere apenas os .equ KEY_*.
 
 .data
-.equ KEY_UP, 0
-.equ KEY_DOWN, 1
-.equ KEY_LEFT, 2
-.equ KEY_RIGHT, 3
+.equ KEY_LEFT, 0
+.equ KEY_RIGHT, 1
+.equ KEY_UP, 2
+.equ KEY_DOWN, 3
 .equ KEY_SPACE, 4
 
 .equ GRID_W, 32

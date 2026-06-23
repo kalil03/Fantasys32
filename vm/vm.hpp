@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <SDL2/SDL.h>
 
 // ============================================================================
 // Constantes da arquitetura Fantasys32
@@ -13,14 +14,18 @@ constexpr int      PC            = 15;  // Program Counter
 
 // Mapa de memória
 constexpr uint32_t FRAMEBUFFER_INICIO = 0x00FB4000;
-constexpr uint32_t FRAMEBUFFER_FIM    = 0x00FFEFFF;
-constexpr uint32_t PILHA_TOPO         = 0x00FFFFFF; // SP inicial
 constexpr uint32_t PILHA_BASE         = 0x00FFF000; // limite inferior da pilha
 
 // Vídeo
 constexpr int VIDEO_LARG = 320;
 constexpr int VIDEO_ALT  = 240;
 constexpr int FRAMEBUFFER_PIXELS = VIDEO_LARG * VIDEO_ALT;
+
+// Tempo: 60 FPS. Quantas instruções rodam por frame. A especificação é ambígua
+// (cita "104"); usamos um valor folgado para que o jogo seja fluido — a pausa
+// real é controlada pela instrução SLEEP. Fácil de ajustar aqui.
+constexpr int FPS                = 60;
+constexpr int INSTR_POR_FRAME    = 50000;
 
 // A classe representa todo o estado da máquina virtual.
 class VM {
@@ -31,29 +36,62 @@ public:
     // Carrega um arquivo .bin (cabeçalho + dados + código) na memória.
     void carregarCodigo(const std::string& arqBin);
 
-    // Executa uma única instrução (fetch -> decode -> execute).
-    void executarInstrucao();
+    // Configuração vinda da linha de comando.
+    void setEscala(int e)      { escala = (e < 1 ? 1 : e); }
+    void setSemSyscall(bool b) { semSyscall = b; }
 
-    // Utilidades de depuração.
+    // Loop principal: cria a janela SDL e executa até HALT ou fechar a janela.
+    void executar();
+
+    // Utilidade de depuração.
     void imprimirRegistradores() const;
-
-    // Indica se a VM deve continuar executando (HALT zera isto).
-    bool rodando() const { return executando; }
 
 private:
     int32_t  regs[NUM_REGS];
     uint8_t* mem;
     bool     executando;
 
-    // Acesso à memória (big-endian), já com checagem de alinhamento/limites.
+    // Configuração
+    int  escala     = 1;
+    bool semSyscall = false;
+
+    // Estado de vídeo (SDL)
+    SDL_Window*   janela    = nullptr;
+    SDL_Renderer* renderer  = nullptr;
+    SDL_Texture*  textura   = nullptr;
+
+    // Estado de áudio (SDL)
+    SDL_AudioDeviceID audioDev = 0;
+
+    // Tempo / aleatoriedade
+    uint32_t numFrames   = 0;   // frames renderizados (FRAMENUM)
+    uint64_t dormirAteMs = 0;   // instante até o qual SLEEP pausa a execução
+    uint32_t rngState    = 1;   // estado do gerador LCG (SRAND/RAND)
+
+    // --- Núcleo ---
+    void executarInstrucao();
     uint32_t lerMemoria(uint32_t endereco) const;
     void     escreverMemoria(uint32_t endereco, uint32_t valor);
-
-    // Operações de pilha (com checagem de overflow/underflow).
     void     empilhar(uint32_t valor);
     uint32_t desempilhar();
-
-    // Erros que abortam a execução.
     void erro(const std::string& msg, uint32_t endereco) const;
     void checarAlinhamento(uint32_t endereco) const;
+
+    // --- Vídeo / SDL ---
+    void inicializarSDL();
+    void finalizarSDL();
+    void processarEventos();
+    void renderizar();
+    uint32_t* framebuffer() { return (uint32_t*)(mem + FRAMEBUFFER_INICIO); }
+    void pintarPixel(int x, int y, uint32_t cor);
+    void desenharRect(int x, int y, int w, int h, uint32_t cor);
+    void desenharSprite(int x, int y, int w, int h, uint32_t addr);
+    void desenharChar(int x, int y, char ch, uint32_t cor);
+    void desenharString(int x, int y, uint32_t addr, uint32_t cor);
+    void desenharInt(int x, int y, int32_t valor, uint32_t cor);
+
+    // --- E/S ---
+    bool teclaPressionada(int id) const;
+    void tocarSom(int freq, int ms, int forma);
+    uint32_t proximoAleatorio(); // avança o LCG
 };
