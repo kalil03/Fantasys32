@@ -56,6 +56,7 @@ sx: .space MAXLEN
 sy: .space MAXLEN
 
 msg_go: .string "GAME OVER"
+msg_pt: .string "PONTOS"
 msg_rs: .string "APERTE ESPACO"
 
 .text
@@ -552,16 +553,34 @@ GAME_OVER:
     MOVL R1, GAMEOVER_BG.l
     MOVH R1, GAMEOVER_BG.h
     CLEAR R1
-    ; textos
-    MOVL R1, 116
-    MOVL R2, 96
+    ; "GAME OVER" (9 chars = 144px -> x = (320-144)/2 = 88)
+    MOVL R1, 88
+    MOVL R2, 64
     MOVL R3, msg_go.l
     MOVH R3, msg_go.h
     MOVL R4, COR_TXT.l
     MOVH R4, COR_TXT.h
     PSTR R1, R2, R3, R4
-    MOVL R1, 92
-    MOVL R2, 116
+    ; "PONTOS" (6 chars = 96px -> x = (320-96)/2 = 112)
+    MOVL R1, 112
+    MOVL R2, 104
+    MOVL R3, msg_pt.l
+    MOVH R3, msg_pt.h
+    MOVL R4, COR_TXT.l
+    MOVH R4, COR_TXT.h
+    PSTR R1, R2, R3, R4
+    ; valor da pontuacao (centralizado p/ 1-2 digitos)
+    MOVL R1, score.l
+    MOVH R1, score.h
+    LOAD R1, R6, 0
+    MOVL R1, 148
+    MOVL R2, 128
+    MOVL R4, COR_TXT.l
+    MOVH R4, COR_TXT.h
+    PINT R1, R2, R6, R4
+    ; "APERTE ESPACO" (13 chars = 208px -> x = (320-208)/2 = 56)
+    MOVL R1, 56
+    MOVL R2, 168
     MOVL R3, msg_rs.l
     MOVH R3, msg_rs.h
     MOVL R4, COR_TXT.l
