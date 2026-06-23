@@ -55,12 +55,15 @@ grew: .var 0            ; 1 se cresceu neste passo
 sx: .space MAXLEN
 sy: .space MAXLEN
 
+msg_title: .string "SNAKE"
+msg_start: .string "ESPACO PARA COMECAR"
 msg_go: .string "GAME OVER"
 msg_pt: .string "PONTOS"
 msg_rs: .string "APERTE ESPACO"
 
 .text
 START:
+    CALL TELA_INICIAL       ; menu inicial: espera ESPACO
     CALL INIT
 
 LOOP:
@@ -80,6 +83,36 @@ LOOP:
 GUARDA_TICK:
     STORE R1, R2, 0
     JMP LOOP
+
+; ---------------------------------------------------------------------------
+; TELA_INICIAL: menu de abertura. Mostra o titulo e espera ESPACO (start).
+; ---------------------------------------------------------------------------
+TELA_INICIAL:
+    ; fundo
+    MOVL R1, BG.l
+    MOVH R1, BG.h
+    CLEAR R1
+    ; titulo "SNAKE" (5 chars = 80px -> x = (320-80)/2 = 120)
+    MOVL R1, 120
+    MOVL R2, 72
+    MOVL R3, msg_title.l
+    MOVH R3, msg_title.h
+    MOVL R4, COR_HEAD.l
+    MOVH R4, COR_HEAD.h
+    PSTR R1, R2, R3, R4
+    ; "ESPACO PARA COMECAR" (19 chars = 304px -> x = (320-304)/2 = 8)
+    MOVL R1, 8
+    MOVL R2, 132
+    MOVL R3, msg_start.l
+    MOVH R3, msg_start.h
+    MOVL R4, COR_TXT.l
+    MOVH R4, COR_TXT.h
+    PSTR R1, R2, R3, R4
+TELA_WAIT:
+    MOVL R2, K_SPACE
+    GKEY R1, R2
+    BEQ R1, R0, TELA_WAIT   ; enquanto ESPACO nao for pressionado, espera
+    RET
 
 ; ---------------------------------------------------------------------------
 ; INIT: estado inicial + desenho do quadro inicial (uma unica vez).
