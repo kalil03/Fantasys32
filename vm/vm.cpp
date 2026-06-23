@@ -132,10 +132,7 @@ uint32_t VM::desempilhar() {
 
 // ============================================================================
 // Ciclo de execução de uma instrução (fetch -> decode -> execute)
-//
-// Fases implementadas:
-//   Fase 1: aritmética/lógica (00–0C), MOVL/MOVH (0D/0E), LOAD/STORE (0F/10), HALT.
-//   (Fase 2 adicionará controle de fluxo e pilha; demais nas fases seguintes.)
+// Implementa todo o conjunto de instruções do Fantasys32 (opcodes 0x00–0x2B).
 // ============================================================================
 void VM::executarInstrucao() {
     uint32_t instr = lerMemoria(regs[PC]);
@@ -169,17 +166,21 @@ void VM::executarInstrucao() {
     uint32_t re = (instr >> 6) & 0xF;
 
     switch (opcode) {
-        // ---- Aritmética (com sinal, overflow trunca em 32 bits) ----
-        case 0x00: regs[rd] = regs[rs_R] + regs[rt_R]; break; // ADD
-        case 0x01: regs[rd] = regs[rs_R] - regs[rt_R]; break; // SUB
-        case 0x02: regs[rd] = regs[rs_R] * regs[rt_R]; break; // MUL
+        // ---- Aritmética (com sinal; overflow trunca em 32 bits) ----
+        // As somas/produtos são feitos em uint32_t para que o overflow tenha
+        // comportamento definido (wraparound), evitando UB de inteiro com sinal.
+        case 0x00: regs[rd] = (int32_t)((uint32_t)regs[rs_R] + (uint32_t)regs[rt_R]); break; // ADD
+        case 0x01: regs[rd] = (int32_t)((uint32_t)regs[rs_R] - (uint32_t)regs[rt_R]); break; // SUB
+        case 0x02: regs[rd] = (int32_t)((uint32_t)regs[rs_R] * (uint32_t)regs[rt_R]); break; // MUL
         case 0x03: // DIV
             if (regs[rt_R] == 0) erro("divisão por zero", regs[PC] - 4);
-            regs[rd] = regs[rs_R] / regs[rt_R];
+            if (regs[rt_R] == -1) regs[rd] = (int32_t)(0u - (uint32_t)regs[rs_R]); // evita UB em INT_MIN/-1
+            else regs[rd] = regs[rs_R] / regs[rt_R];
             break;
         case 0x04: // MOD
             if (regs[rt_R] == 0) erro("módulo por zero", regs[PC] - 4);
-            regs[rd] = regs[rs_R] % regs[rt_R];
+            if (regs[rt_R] == -1) regs[rd] = 0; // resto de x / -1 é sempre 0
+            else regs[rd] = regs[rs_R] % regs[rt_R];
             break;
 
         // ---- Lógica (bit a bit, sem sinal) ----
@@ -208,7 +209,7 @@ void VM::executarInstrucao() {
         }
 
         // ---- ADDI (tipo I): rt = rs + imm ----
-        case 0x0C: regs[rt] = regs[rs] + imm18s; break;
+        case 0x0C: regs[rt] = (int32_t)((uint32_t)regs[rs] + (uint32_t)imm18s); break;
 
         // ---- Movimentação ----
         case 0x0D: // MOVL rt, imm16  (zera os bits superiores)
@@ -241,9 +242,11 @@ void VM::executarInstrucao() {
 
         // ---- Saltos incondicionais (tipo J): endereço absoluto = addr26*4 ----
         case 0x17: // JMP
+            if (addr26 * 4 > 0x00FFFFFF) erro("endereço de JMP inválido", addr26 * 4);
             regs[PC] = addr26 * 4;
             break;
         case 0x18: // CALL: empilha o endereço de retorno (PC já = próxima instrução)
+            if (addr26 * 4 > 0x00FFFFFF) erro("endereço de CALL inválido", addr26 * 4);
             empilhar((uint32_t)regs[PC]);
             regs[PC] = addr26 * 4;
             break;
@@ -255,8 +258,8 @@ void VM::executarInstrucao() {
         case 0x1A: // POP rd
             regs[rd] = (int32_t)desempilhar();
             break;
-        case 0x1B: regs[rd] = regs[rd] + 1; break; // INC
-        case 0x1C: regs[rd] = regs[rd] - 1; break; // DEC
+        case 0x1B: regs[rd] = (int32_t)((uint32_t)regs[rd] + 1); break; // INC
+        case 0x1C: regs[rd] = (int32_t)((uint32_t)regs[rd] - 1); break; // DEC
         case 0x1D: regs[rd] = ~regs[rd];      break; // NOT
         case 0x1E: // RET: desempilha o endereço de retorno
             regs[PC] = (int32_t)desempilhar();
