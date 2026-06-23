@@ -141,15 +141,15 @@ Cada fase entrega algo testável. Só passar para a próxima quando a atual func
 > Nota: a fonte é autoral (não usamos o PNG do professor) para evitar dependência
 > de decodificador de imagem e código de terceiros. Minúsculas viram maiúsculas.
 
-### Fase 6 — Jogo Snake (Assembly)
-- `jogo.asm`: `.data` (grid, cobra, comida, cores) + `.text`.
-- Lógica: movimento, crescer ao comer, colisão parede/corpo, RAND p/ comida.
-- Render com RECT/CLEAR; placar com PINT; som com PLAY.
-- Rodar com `--no-syscall` para garantir independência de syscalls.
+### Fase 6 — Jogo Snake (Assembly) ✅
+- [x] `jogo.asm` roda na VM: cobra, comida, placar, colisão parede/corpo, GAME OVER + restart.
+- [x] Corrigido para a convenção `ADDI` do assembler (resolveu a tela preta).
+- [x] Lógica usa só instruções básicas; funciona com `--no-syscall`.
 
-### Fase 7 — Empacotamento e entrega
-- README_COMPILAR.pdf, README_USO.pdf, `.zip` com `vm/` e `jogo/`.
-- Testar compilação limpa no Linux (g++ + SDL2).
+### Fase 7 — Empacotamento e entrega (em andamento)
+- [x] `README_COMPILAR.md` e `README_USO.md` (fonte dos PDFs de entrega).
+- [ ] Gerar os PDFs e o `.zip` final — adiado (ainda haverá modificações).
+- [x] Compilação limpa no Linux (g++ + SDL2), sem warnings.
 
 ---
 
