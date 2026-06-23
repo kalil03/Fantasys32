@@ -1,486 +1,575 @@
-; Fantasys32 - Snake simples
-; Objetivo: comer a comida vermelha, crescer e evitar parede/corpo.
+; ============================================================================
+; Fantasys32 - Snake
+; Objetivo: comer a comida vermelha, crescer e nao bater na parede/corpo.
 ;
-; Controles (mapa de teclas da VM, conforme a especificação):
-;   KEY_LEFT=0, KEY_RIGHT=1, KEY_UP=2, KEY_DOWN=3, KEY_SPACE=4
+; Controles (mapa de teclas da VM):
+;   ESQUERDA=0, DIREITA=1, CIMA=2, BAIXO=3, ESPACO=4
 ;
-; NOTA SOBRE ADDI: no assembler, "ADDI A, B, imm" gera B = A + imm
-; (o destino é o SEGUNDO operando, igual a LOAD/STORE onde a base vem primeiro).
+; Desenho INCREMENTAL (sem CLEAR a cada passo): a cada movimento apaga-se
+; apenas a cauda e desenha-se a nova cabeca -> imagem estavel, sem piscar.
+; A velocidade e controlada por um contador (move a cada SPEED ciclos).
+;
+; Convencoes do assembler usadas aqui:
+;   ADD/SUB/MUL Rd, Ra, Rb  -> Rd = Ra (op) Rb        (destino primeiro)
+;   LOAD  base, dest, i     -> dest = Mem[base + i*4] (base primeiro)
+;   STORE base, val,  i     -> Mem[base + i*4] = val  (base primeiro)
+; ============================================================================
 
 .data
-.equ KEY_LEFT, 0
-.equ KEY_RIGHT, 1
-.equ KEY_UP, 2
-.equ KEY_DOWN, 3
-.equ KEY_SPACE, 4
-
-.equ GRID_W, 32
-.equ GRID_H, 24
+.equ GW, 32
+.equ GH, 24
 .equ CELL, 10
-.equ MAX_CELLS, 64
+.equ MAXLEN, 64
+.equ SPEED, 8            ; move a cada 8 ciclos (~7-8 passos/seg)
 
-.equ PRETO, 0xFF000000
-.equ VERDE, 0xFF00CC55
-.equ VERDE_HEAD, 0xFF66FF99
-.equ VERMELHO, 0xFFFF3030
-.equ BRANCO, 0xFFFFFFFF
-.equ FUNDO_GAMEOVER, 0xFF330000
+.equ K_LEFT, 0
+.equ K_RIGHT, 1
+.equ K_UP, 2
+.equ K_DOWN, 3
+.equ K_SPACE, 4
 
-snake_len: .var 3
-dir_x: .var 1
-dir_y: .var 0
-head_x: .var 8
-head_y: .var 12
-food_x: .var 20
-food_y: .var 12
+.equ BG, 0xFF101018      ; fundo
+.equ COR_BODY, 0xFF22CC44
+.equ COR_HEAD, 0xFF88FF88
+.equ COR_FOOD, 0xFFEE3030
+.equ COR_TXT, 0xFFFFFFFF
+.equ GAMEOVER_BG, 0xFF330000
+
+len: .var 3
+dx: .var 1
+dy: .var 0
+fx: .var 20
+fy: .var 12
 score: .var 0
+tick: .var 0
 
-snake_x: .space MAX_CELLS
-snake_y: .space MAX_CELLS
+; temporarios persistidos em memoria (sobrevivem aos CALLs de desenho)
+nhx: .var 0              ; nova cabeca
+nhy: .var 0
+ohx: .var 0              ; cabeca antiga
+ohy: .var 0
+otx: .var 0              ; cauda antiga
+oty: .var 0
+grew: .var 0            ; 1 se cresceu neste passo
 
-msg_game_over: .string "GAME OVER"
-msg_restart: .string "ESPACO reinicia"
+sx: .space MAXLEN
+sy: .space MAXLEN
+
+msg_go: .string "GAME OVER"
+msg_rs: .string "APERTE ESPACO"
 
 .text
 START:
-    CALL INIT_GAME
+    CALL INIT
 
-GAME_LOOP:
+LOOP:
     CALL READ_INPUT
-    CALL MOVE_SNAKE
-    CALL DRAW_SCREEN
-    MOVL R1, 7
-    SLEEP R1
-    JMP GAME_LOOP
+
+    ; --- controle de velocidade: so move quando tick chega em SPEED ---
+    MOVL R1, tick.l
+    MOVH R1, tick.h
+    LOAD R1, R2, 0          ; R2 = tick
+    INC R2
+    MOVL R3, SPEED
+    BLT R2, R3, GUARDA_TICK ; tick < SPEED -> ainda nao move
+    MOVL R2, 0              ; reseta tick
+    STORE R1, R2, 0
+    CALL STEP
+    JMP LOOP
+GUARDA_TICK:
+    STORE R1, R2, 0
+    JMP LOOP
 
 ; ---------------------------------------------------------------------------
-; Inicializa variaveis e os tres primeiros segmentos da cobra.
+; INIT: estado inicial + desenho do quadro inicial (uma unica vez).
 ; ---------------------------------------------------------------------------
-INIT_GAME:
-    MOVL R1, snake_len.l
-    MOVH R1, snake_len.h
+INIT:
+    ; valores iniciais
+    MOVL R1, len.l
+    MOVH R1, len.h
     MOVL R2, 3
     STORE R1, R2, 0
-
-    MOVL R1, dir_x.l
-    MOVH R1, dir_x.h
+    MOVL R1, dx.l
+    MOVH R1, dx.h
     MOVL R2, 1
     STORE R1, R2, 0
-
-    MOVL R1, dir_y.l
-    MOVH R1, dir_y.h
+    MOVL R1, dy.l
+    MOVH R1, dy.h
     MOVL R2, 0
     STORE R1, R2, 0
-
-    MOVL R1, head_x.l
-    MOVH R1, head_x.h
-    MOVL R2, 8
-    STORE R1, R2, 0
-
-    MOVL R1, head_y.l
-    MOVH R1, head_y.h
-    MOVL R2, 12
-    STORE R1, R2, 0
-
-    MOVL R1, food_x.l
-    MOVH R1, food_x.h
+    MOVL R1, fx.l
+    MOVH R1, fx.h
     MOVL R2, 20
     STORE R1, R2, 0
-
-    MOVL R1, food_y.l
-    MOVH R1, food_y.h
+    MOVL R1, fy.l
+    MOVH R1, fy.h
     MOVL R2, 12
     STORE R1, R2, 0
-
     MOVL R1, score.l
     MOVH R1, score.h
     MOVL R2, 0
     STORE R1, R2, 0
+    MOVL R1, tick.l
+    MOVH R1, tick.h
+    MOVL R2, 0
+    STORE R1, R2, 0
 
-    ; snake_x = [8, 7, 6]
-    MOVL R1, snake_x.l
-    MOVH R1, snake_x.h
+    ; corpo inicial: (8,12),(7,12),(6,12)
+    MOVL R1, sx.l
+    MOVH R1, sx.h
     MOVL R2, 8
     STORE R1, R2, 0
     MOVL R2, 7
     STORE R1, R2, 1
     MOVL R2, 6
     STORE R1, R2, 2
-
-    ; snake_y = [12, 12, 12]
-    MOVL R1, snake_y.l
-    MOVH R1, snake_y.h
+    MOVL R1, sy.l
+    MOVH R1, sy.h
     MOVL R2, 12
     STORE R1, R2, 0
     STORE R1, R2, 1
     STORE R1, R2, 2
+
+    ; semente do gerador aleatorio
+    MOVL R1, 12345
+    SRAND R1
+
+    ; fundo
+    MOVL R1, BG.l
+    MOVH R1, BG.h
+    CLEAR R1
+
+    ; desenha a cobra inicial (cabeca + 2 corpos)
+    MOVL R1, 8
+    MOVL R2, 12
+    MOVL R3, COR_HEAD.l
+    MOVH R3, COR_HEAD.h
+    CALL DRAW_CELL
+    MOVL R1, 7
+    MOVL R2, 12
+    MOVL R3, COR_BODY.l
+    MOVH R3, COR_BODY.h
+    CALL DRAW_CELL
+    MOVL R1, 6
+    MOVL R2, 12
+    MOVL R3, COR_BODY.l
+    MOVH R3, COR_BODY.h
+    CALL DRAW_CELL
+
+    ; desenha a comida
+    MOVL R1, 20
+    MOVL R2, 12
+    MOVL R3, COR_FOOD.l
+    MOVH R3, COR_FOOD.h
+    CALL DRAW_CELL
+
+    CALL DRAW_SCORE
     RET
 
 ; ---------------------------------------------------------------------------
-; Le as setas. A cobra nao pode inverter diretamente o sentido.
+; READ_INPUT: atualiza dx/dy. Nao permite inverter o sentido diretamente.
 ; ---------------------------------------------------------------------------
 READ_INPUT:
-    MOVL R2, KEY_UP
+    MOVL R2, K_LEFT
     GKEY R1, R2
-    BNE R1, R0, TRY_UP
-
-    MOVL R2, KEY_DOWN
+    BNE R1, R0, IN_LEFT
+    MOVL R2, K_RIGHT
     GKEY R1, R2
-    BNE R1, R0, TRY_DOWN
-
-    MOVL R2, KEY_LEFT
+    BNE R1, R0, IN_RIGHT
+    MOVL R2, K_UP
     GKEY R1, R2
-    BNE R1, R0, TRY_LEFT
-
-    MOVL R2, KEY_RIGHT
+    BNE R1, R0, IN_UP
+    MOVL R2, K_DOWN
     GKEY R1, R2
-    BNE R1, R0, TRY_RIGHT
+    BNE R1, R0, IN_DOWN
     RET
 
-TRY_UP:
-    MOVL R3, dir_y.l
-    MOVH R3, dir_y.h
-    LOAD R3, R4, 0
-    MOVL R5, 1
-    BEQ R4, R5, END_READ_INPUT
-    MOVL R3, dir_x.l
-    MOVH R3, dir_x.h
-    MOVL R4, 0
-    STORE R3, R4, 0
-    MOVL R3, dir_y.l
-    MOVH R3, dir_y.h
-    ADDI R0, R4, -1
-    STORE R3, R4, 0
-    RET
-
-TRY_DOWN:
-    MOVL R3, dir_y.l
-    MOVH R3, dir_y.h
-    LOAD R3, R4, 0
-    ADDI R0, R5, -1
-    BEQ R4, R5, END_READ_INPUT
-    MOVL R3, dir_x.l
-    MOVH R3, dir_x.h
-    MOVL R4, 0
-    STORE R3, R4, 0
-    MOVL R3, dir_y.l
-    MOVH R3, dir_y.h
-    MOVL R4, 1
-    STORE R3, R4, 0
-    RET
-
-TRY_LEFT:
-    MOVL R3, dir_x.l
-    MOVH R3, dir_x.h
-    LOAD R3, R4, 0
-    MOVL R5, 1
-    BEQ R4, R5, END_READ_INPUT
-    MOVL R3, dir_x.l
-    MOVH R3, dir_x.h
-    ADDI R0, R4, -1
-    STORE R3, R4, 0
-    MOVL R3, dir_y.l
-    MOVH R3, dir_y.h
-    MOVL R4, 0
-    STORE R3, R4, 0
-    RET
-
-TRY_RIGHT:
-    MOVL R3, dir_x.l
-    MOVH R3, dir_x.h
-    LOAD R3, R4, 0
-    ADDI R0, R5, -1
-    BEQ R4, R5, END_READ_INPUT
-    MOVL R3, dir_x.l
-    MOVH R3, dir_x.h
-    MOVL R4, 1
-    STORE R3, R4, 0
-    MOVL R3, dir_y.l
-    MOVH R3, dir_y.h
-    MOVL R4, 0
-    STORE R3, R4, 0
-    RET
-
-END_READ_INPUT:
-    RET
-
-; ---------------------------------------------------------------------------
-; Calcula nova cabeca, testa colisao, move corpo e trata comida.
-; ---------------------------------------------------------------------------
-MOVE_SNAKE:
-    MOVL R1, head_x.l
-    MOVH R1, head_x.h
+IN_LEFT:
+    ; se dx==1 (indo p/ direita) ignora
+    MOVL R1, dx.l
+    MOVH R1, dx.h
     LOAD R1, R2, 0
-    MOVL R3, dir_x.l
-    MOVH R3, dir_x.h
-    LOAD R3, R4, 0
-    ADD R2, R2, R4        ; R2 = novo x
+    MOVL R3, 1
+    BEQ R2, R3, IN_FIM
+    MOVL R2, 0
+    DEC R2                  ; R2 = -1
+    CALL SET_DIR_X
+    RET
+IN_RIGHT:
+    MOVL R1, dx.l
+    MOVH R1, dx.h
+    LOAD R1, R2, 0
+    MOVL R3, 0
+    DEC R3                  ; R3 = -1
+    BEQ R2, R3, IN_FIM
+    MOVL R2, 1
+    CALL SET_DIR_X
+    RET
+IN_UP:
+    MOVL R1, dy.l
+    MOVH R1, dy.h
+    LOAD R1, R2, 0
+    MOVL R3, 1
+    BEQ R2, R3, IN_FIM
+    MOVL R2, 0
+    DEC R2                  ; R2 = -1
+    CALL SET_DIR_Y
+    RET
+IN_DOWN:
+    MOVL R1, dy.l
+    MOVH R1, dy.h
+    LOAD R1, R2, 0
+    MOVL R3, 0
+    DEC R3                  ; R3 = -1
+    BEQ R2, R3, IN_FIM
+    MOVL R2, 1
+    CALL SET_DIR_Y
+    RET
+IN_FIM:
+    RET
 
-    MOVL R1, head_y.l
-    MOVH R1, head_y.h
+; Define dx=R2, dy=0
+SET_DIR_X:
+    MOVL R1, dx.l
+    MOVH R1, dx.h
+    STORE R1, R2, 0
+    MOVL R1, dy.l
+    MOVH R1, dy.h
+    MOVL R2, 0
+    STORE R1, R2, 0
+    RET
+; Define dy=R2, dx=0
+SET_DIR_Y:
+    MOVL R1, dy.l
+    MOVH R1, dy.h
+    STORE R1, R2, 0
+    MOVL R1, dx.l
+    MOVH R1, dx.h
+    MOVL R2, 0
+    STORE R1, R2, 0
+    RET
+
+; ---------------------------------------------------------------------------
+; STEP: um movimento da cobra (logica + desenho incremental).
+; ---------------------------------------------------------------------------
+STEP:
+    ; nova cabeca = cabeca + dir
+    MOVL R1, sx.l
+    MOVH R1, sx.h
+    LOAD R1, R2, 0          ; R2 = head x
+    MOVL R1, dx.l
+    MOVH R1, dx.h
     LOAD R1, R3, 0
-    MOVL R4, dir_y.l
-    MOVH R4, dir_y.h
-    LOAD R4, R5, 0
-    ADD R3, R3, R5        ; R3 = novo y
+    ADD R2, R2, R3          ; R2 = novo x
+    MOVL R1, nhx.l
+    MOVH R1, nhx.h
+    STORE R1, R2, 0
 
+    MOVL R1, sy.l
+    MOVH R1, sy.h
+    LOAD R1, R4, 0          ; head y
+    MOVL R1, dy.l
+    MOVH R1, dy.h
+    LOAD R1, R5, 0
+    ADD R4, R4, R5          ; R4 = novo y
+    MOVL R1, nhy.l
+    MOVH R1, nhy.h
+    STORE R1, R4, 0
+
+    ; colisao com paredes
     BLT R2, R0, GAME_OVER
-    BLT R3, R0, GAME_OVER
-    MOVL R4, 31
-    BGT R2, R4, GAME_OVER
-    MOVL R4, 23
-    BGT R3, R4, GAME_OVER
+    BLT R4, R0, GAME_OVER
+    MOVL R6, 31
+    BGT R2, R6, GAME_OVER
+    MOVL R6, 23
+    BGT R4, R6, GAME_OVER
 
-    ; Colisao com o corpo: compara novo ponto com cada segmento.
-    MOVL R4, snake_len.l
-    MOVH R4, snake_len.h
-    LOAD R4, R5, 0        ; R5 = tamanho
-    MOVL R6, 0            ; R6 = i
-
-SELF_LOOP:
-    BGE R6, R5, SELF_OK
-
-    MOVL R7, 4
-    MUL R8, R6, R7
-
-    MOVL R9, snake_x.l
-    MOVH R9, snake_x.h
-    ADD R9, R9, R8
-    LOAD R9, R10, 0
-    BNE R10, R2, SELF_NEXT
-
-    MOVL R9, snake_y.l
-    MOVH R9, snake_y.h
-    ADD R9, R9, R8
-    LOAD R9, R10, 0
-    BEQ R10, R3, GAME_OVER
-
-SELF_NEXT:
-    INC R6
-    JMP SELF_LOOP
-
-SELF_OK:
-    ; Verifica se comeu.
-    MOVL R6, food_x.l
-    MOVH R6, food_x.h
-    LOAD R6, R7, 0
-    BNE R2, R7, NO_EAT
-    MOVL R6, food_y.l
-    MOVH R6, food_y.h
-    LOAD R6, R7, 0
-    BNE R3, R7, NO_EAT
-
-    ; Comeu: aumenta o tamanho ate MAX_CELLS.
-    MOVL R6, MAX_CELLS
-    BGE R5, R6, AFTER_GROW
-    INC R5
-    MOVL R6, snake_len.l
-    MOVH R6, snake_len.h
-    STORE R6, R5, 0
-
-AFTER_GROW:
-    MOVL R6, score.l
-    MOVH R6, score.h
-    LOAD R6, R7, 0
-    INC R7
-    STORE R6, R7, 0
-
-    ; PLACE_FOOD usa R1-R3. Guardamos a nova cabeca antes da chamada.
-    MOVL R8, head_x.l
-    MOVH R8, head_x.h
-    STORE R8, R2, 0
-    MOVL R8, head_y.l
-    MOVH R8, head_y.h
-    STORE R8, R3, 0
-    CALL PLACE_FOOD
-    MOVL R8, head_x.l
-    MOVH R8, head_x.h
-    LOAD R8, R2, 0
-    MOVL R8, head_y.l
-    MOVH R8, head_y.h
-    LOAD R8, R3, 0
-    JMP SHIFT_BODY
-
-NO_EAT:
-    ; Sem comida: tamanho permanece igual.
-
-SHIFT_BODY:
-    ; Desloca corpo do fim para o inicio: pos[i] = pos[i - 1].
-    ADDI R5, R6, -1
-
-SHIFT_LOOP:
-    BLE R6, R0, WRITE_HEAD
-    ADDI R6, R7, -1
+    ; colisao com o corpo (ignora o ultimo segmento, que vai sair)
+    MOVL R1, len.l
+    MOVH R1, len.h
+    LOAD R1, R7, 0          ; R7 = len
+    MOVL R8, 1
+    SUB R9, R7, R8          ; R9 = len-1
+    MOVL R6, 0             ; i
+COL_LOOP:
+    BGE R6, R9, COL_OK
     MOVL R8, 4
-    MUL R9, R7, R8
-    MUL R10, R6, R8
+    MUL R10, R6, R8        ; offset i
+    MOVL R1, sx.l
+    MOVH R1, sx.h
+    ADD R11, R1, R10
+    LOAD R11, R12, 0       ; sx[i]
+    BNE R12, R2, COL_NEXT
+    MOVL R1, sy.l
+    MOVH R1, sy.h
+    ADD R11, R1, R10
+    LOAD R11, R12, 0       ; sy[i]
+    BEQ R12, R4, GAME_OVER
+COL_NEXT:
+    INC R6
+    JMP COL_LOOP
+COL_OK:
+    ; guarda cabeca antiga (sx[0],sy[0])
+    MOVL R1, sx.l
+    MOVH R1, sx.h
+    LOAD R1, R2, 0
+    MOVL R1, ohx.l
+    MOVH R1, ohx.h
+    STORE R1, R2, 0
+    MOVL R1, sy.l
+    MOVH R1, sy.h
+    LOAD R1, R2, 0
+    MOVL R1, ohy.l
+    MOVH R1, ohy.h
+    STORE R1, R2, 0
 
-    MOVL R11, snake_x.l
-    MOVH R11, snake_x.h
-    ADD R12, R11, R9
+    ; guarda cauda antiga (sx[len-1],sy[len-1])
+    MOVL R1, len.l
+    MOVH R1, len.h
+    LOAD R1, R7, 0
+    MOVL R8, 1
+    SUB R9, R7, R8
+    MOVL R8, 4
+    MUL R10, R9, R8
+    MOVL R1, sx.l
+    MOVH R1, sx.h
+    ADD R11, R1, R10
+    LOAD R11, R12, 0
+    MOVL R1, otx.l
+    MOVH R1, otx.h
+    STORE R1, R12, 0
+    MOVL R1, sy.l
+    MOVH R1, sy.h
+    ADD R11, R1, R10
+    LOAD R11, R12, 0
+    MOVL R1, oty.l
+    MOVH R1, oty.h
+    STORE R1, R12, 0
+
+    ; grew = 0 por padrao
+    MOVL R1, grew.l
+    MOVH R1, grew.h
+    MOVL R2, 0
+    STORE R1, R2, 0
+
+    ; comeu? nova cabeca == comida
+    MOVL R1, fx.l
+    MOVH R1, fx.h
+    LOAD R1, R5, 0
+    MOVL R1, nhx.l
+    MOVH R1, nhx.h
+    LOAD R1, R2, 0
+    BNE R2, R5, FEZ_SHIFT
+    MOVL R1, fy.l
+    MOVH R1, fy.h
+    LOAD R1, R6, 0
+    MOVL R1, nhy.l
+    MOVH R1, nhy.h
+    LOAD R1, R4, 0
+    BNE R4, R6, FEZ_SHIFT
+
+    ; --- COMEU ---
+    MOVL R1, score.l
+    MOVH R1, score.h
+    LOAD R1, R7, 0
+    INC R7
+    STORE R1, R7, 0
+    ; som curto
+    MOVL R1, 880
+    MOVL R2, 50
+    MOVL R3, 1
+    PLAY R1, R2, R3
+    ; cresce se houver espaco
+    MOVL R1, len.l
+    MOVH R1, len.h
+    LOAD R1, R7, 0
+    MOVL R8, MAXLEN
+    BGE R7, R8, SEM_CRESCER
+    INC R7
+    STORE R1, R7, 0
+    MOVL R1, grew.l
+    MOVH R1, grew.h
+    MOVL R2, 1
+    STORE R1, R2, 0
+SEM_CRESCER:
+    ; nova comida + desenho da comida + placar
+    CALL PLACE_FOOD
+    MOVL R5, fx.l
+    MOVH R5, fx.h
+    LOAD R5, R1, 0
+    MOVL R5, fy.l
+    MOVH R5, fy.h
+    LOAD R5, R2, 0
+    MOVL R3, COR_FOOD.l
+    MOVH R3, COR_FOOD.h
+    CALL DRAW_CELL
+    CALL DRAW_SCORE
+
+FEZ_SHIFT:
+    ; desloca o corpo: para i de len-1 ate 1: s[i] = s[i-1]
+    MOVL R1, len.l
+    MOVH R1, len.h
+    LOAD R1, R7, 0
+    MOVL R8, 1
+    SUB R6, R7, R8         ; i = len-1
+SHIFT:
+    BLE R6, R0, WRITE_HEAD
+    MOVL R8, 1
+    SUB R9, R6, R8         ; i-1
+    MOVL R8, 4
+    MUL R10, R6, R8        ; off i
+    MUL R11, R9, R8        ; off i-1
+    MOVL R1, sx.l
+    MOVH R1, sx.h
+    ADD R12, R1, R11
     LOAD R12, R13, 0
-    ADD R12, R11, R10
+    ADD R12, R1, R10
     STORE R12, R13, 0
-
-    MOVL R11, snake_y.l
-    MOVH R11, snake_y.h
-    ADD R12, R11, R9
+    MOVL R1, sy.l
+    MOVH R1, sy.h
+    ADD R12, R1, R11
     LOAD R12, R13, 0
-    ADD R12, R11, R10
+    ADD R12, R1, R10
     STORE R12, R13, 0
-
     DEC R6
-    JMP SHIFT_LOOP
+    JMP SHIFT
 
 WRITE_HEAD:
-    MOVL R6, snake_x.l
-    MOVH R6, snake_x.h
-    STORE R6, R2, 0
-    MOVL R6, snake_y.l
-    MOVH R6, snake_y.h
-    STORE R6, R3, 0
+    MOVL R1, nhx.l
+    MOVH R1, nhx.h
+    LOAD R1, R2, 0
+    MOVL R1, sx.l
+    MOVH R1, sx.h
+    STORE R1, R2, 0
+    MOVL R1, nhy.l
+    MOVH R1, nhy.h
+    LOAD R1, R2, 0
+    MOVL R1, sy.l
+    MOVH R1, sy.h
+    STORE R1, R2, 0
 
-    MOVL R6, head_x.l
-    MOVH R6, head_x.h
-    STORE R6, R2, 0
-    MOVL R6, head_y.l
-    MOVH R6, head_y.h
-    STORE R6, R3, 0
+    ; --- desenho incremental (em rajada, sem CLEAR) ---
+    ; apaga a cauda antiga se nao cresceu
+    MOVL R1, grew.l
+    MOVH R1, grew.h
+    LOAD R1, R5, 0
+    BNE R5, R0, PULA_APAGA
+    MOVL R5, otx.l
+    MOVH R5, otx.h
+    LOAD R5, R1, 0
+    MOVL R5, oty.l
+    MOVH R5, oty.h
+    LOAD R5, R2, 0
+    MOVL R3, BG.l
+    MOVH R3, BG.h
+    CALL DRAW_CELL
+PULA_APAGA:
+    ; cabeca antiga vira corpo
+    MOVL R5, ohx.l
+    MOVH R5, ohx.h
+    LOAD R5, R1, 0
+    MOVL R5, ohy.l
+    MOVH R5, ohy.h
+    LOAD R5, R2, 0
+    MOVL R3, COR_BODY.l
+    MOVH R3, COR_BODY.h
+    CALL DRAW_CELL
+    ; nova cabeca
+    MOVL R5, nhx.l
+    MOVH R5, nhx.h
+    LOAD R5, R1, 0
+    MOVL R5, nhy.l
+    MOVH R5, nhy.h
+    LOAD R5, R2, 0
+    MOVL R3, COR_HEAD.l
+    MOVH R3, COR_HEAD.h
+    CALL DRAW_CELL
     RET
 
 ; ---------------------------------------------------------------------------
-; Reposiciona a comida de modo simples e deterministico.
-; food_x = (food_x + 7) mod 32, food_y = (food_y + 5) mod 24.
+; PLACE_FOOD: sorteia nova posicao da comida.
 ; ---------------------------------------------------------------------------
 PLACE_FOOD:
-    MOVL R1, food_x.l
-    MOVH R1, food_x.h
-    LOAD R1, R2, 0
-    ADDI R2, R2, 7
+    MOVL R2, 0
     MOVL R3, 31
-    BLE R2, R3, FOOD_X_OK
-    ADDI R2, R2, -32
-FOOD_X_OK:
-    STORE R1, R2, 0
-
-    MOVL R1, food_y.l
-    MOVH R1, food_y.h
-    LOAD R1, R2, 0
-    ADDI R2, R2, 5
+    RAND R4, R2, R3
+    MOVL R1, fx.l
+    MOVH R1, fx.h
+    STORE R1, R4, 0
+    MOVL R2, 0
     MOVL R3, 23
-    BLE R2, R3, FOOD_Y_OK
-    ADDI R2, R2, -24
-FOOD_Y_OK:
-    STORE R1, R2, 0
+    RAND R4, R2, R3
+    MOVL R1, fy.l
+    MOVH R1, fy.h
+    STORE R1, R4, 0
     RET
 
 ; ---------------------------------------------------------------------------
-; Desenha fundo, comida, cobra e pontuacao.
+; DRAW_CELL: desenha uma celula 10x10. R1=coluna, R2=linha, R3=cor.
 ; ---------------------------------------------------------------------------
-DRAW_SCREEN:
-    MOVL R1, PRETO.l
-    MOVH R1, PRETO.h
-    CLEAR R1
-
-    ; Comida.
-    MOVL R1, food_x.l
-    MOVH R1, food_x.h
-    LOAD R1, R2, 0
-    MOVL R3, CELL
-    MUL R2, R2, R3
-
-    MOVL R1, food_y.l
-    MOVH R1, food_y.h
-    LOAD R1, R4, 0
-    MUL R4, R4, R3
-
-    MOVL R1, CELL
-    MOVL R5, VERMELHO.l
-    MOVH R5, VERMELHO.h
-    RECT R2, R4, R1, R1, R5
-
-    ; Cobra.
-    MOVL R6, snake_len.l
-    MOVH R6, snake_len.h
-    LOAD R6, R7, 0
-    MOVL R6, 0
-
-DRAW_SNAKE_LOOP:
-    BGE R6, R7, DRAW_SCORE
-    MOVL R8, 4
-    MUL R9, R6, R8
-
-    MOVL R10, snake_x.l
-    MOVH R10, snake_x.h
-    ADD R10, R10, R9
-    LOAD R10, R2, 0
-    MOVL R11, CELL
-    MUL R2, R2, R11
-
-    MOVL R10, snake_y.l
-    MOVH R10, snake_y.h
-    ADD R10, R10, R9
-    LOAD R10, R3, 0
-    MUL R3, R3, R11
-
+DRAW_CELL:
     MOVL R4, CELL
-    BEQ R6, R0, DRAW_HEAD
-    MOVL R5, VERDE.l
-    MOVH R5, VERDE.h
-    RECT R2, R3, R4, R4, R5
-    INC R6
-    JMP DRAW_SNAKE_LOOP
-
-DRAW_HEAD:
-    MOVL R5, VERDE_HEAD.l
-    MOVH R5, VERDE_HEAD.h
-    RECT R2, R3, R4, R4, R5
-    INC R6
-    JMP DRAW_SNAKE_LOOP
-
-DRAW_SCORE:
-    MOVL R1, 260
-    MOVL R2, 6
-    MOVL R3, score.l
-    MOVH R3, score.h
-    LOAD R3, R3, 0
-    MOVL R4, BRANCO.l
-    MOVH R4, BRANCO.h
-    PINT R1, R2, R3, R4
+    MUL R5, R1, R4         ; x = coluna*10
+    MUL R6, R2, R4         ; y = linha*10
+    MOVL R7, CELL          ; largura/altura
+    RECT R5, R6, R7, R7, R3
     RET
 
 ; ---------------------------------------------------------------------------
-; Tela final. Espaco reinicia a partida.
+; DRAW_SCORE: limpa a area e imprime a pontuacao no canto superior esquerdo.
+; ---------------------------------------------------------------------------
+DRAW_SCORE:
+    MOVL R1, 4
+    MOVL R2, 4
+    MOVL R3, 60
+    MOVL R4, 16
+    MOVL R5, BG.l
+    MOVH R5, BG.h
+    RECT R1, R2, R3, R4, R5
+    MOVL R1, score.l
+    MOVH R1, score.h
+    LOAD R1, R6, 0
+    MOVL R1, 4
+    MOVL R2, 4
+    MOVL R4, COR_TXT.l
+    MOVH R4, COR_TXT.h
+    PINT R1, R2, R6, R4
+    RET
+
+; ---------------------------------------------------------------------------
+; GAME_OVER: tela final; ESPACO reinicia.
 ; ---------------------------------------------------------------------------
 GAME_OVER:
-    ; A colisao chega aqui sem RET de MOVE_SNAKE. Resetar SP evita acumular
-    ; enderecos de retorno antigos quando o jogador reinicia muitas vezes.
+    ; reseta a pilha (descarta retornos antigos) para reiniciar limpo
     MOVL R14, 0
     MOVH R14, 0x0100
-
-    MOVL R1, FUNDO_GAMEOVER.l
-    MOVH R1, FUNDO_GAMEOVER.h
+    ; som grave
+    MOVL R1, 140
+    MOVL R2, 300
+    MOVL R3, 1
+    PLAY R1, R2, R3
+    ; fundo vermelho escuro
+    MOVL R1, GAMEOVER_BG.l
+    MOVH R1, GAMEOVER_BG.h
     CLEAR R1
-
-    MOVL R1, 118
+    ; textos
+    MOVL R1, 116
     MOVL R2, 96
-    MOVL R3, msg_game_over.l
-    MOVH R3, msg_game_over.h
-    MOVL R4, BRANCO.l
-    MOVH R4, BRANCO.h
+    MOVL R3, msg_go.l
+    MOVH R3, msg_go.h
+    MOVL R4, COR_TXT.l
+    MOVH R4, COR_TXT.h
     PSTR R1, R2, R3, R4
-
-    MOVL R1, 96
+    MOVL R1, 92
     MOVL R2, 116
-    MOVL R3, msg_restart.l
-    MOVH R3, msg_restart.h
-    MOVL R4, BRANCO.l
-    MOVH R4, BRANCO.h
+    MOVL R3, msg_rs.l
+    MOVH R3, msg_rs.h
+    MOVL R4, COR_TXT.l
+    MOVH R4, COR_TXT.h
     PSTR R1, R2, R3, R4
-
 WAIT_RESTART:
-    MOVL R2, KEY_SPACE
+    MOVL R2, K_SPACE
     GKEY R1, R2
     BEQ R1, R0, WAIT_RESTART
-    CALL INIT_GAME
-    JMP GAME_LOOP
+    CALL INIT
+    JMP LOOP
