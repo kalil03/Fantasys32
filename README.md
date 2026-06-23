@@ -85,7 +85,7 @@ make
 
 - [x] **Fase 0** — Estrutura do projeto e portabilidade para C++
 - [x] **Fase 1** — Núcleo da CPU (aritmética/lógica, MOVL/MOVH, LOAD/STORE)
-- [ ] **Fase 2** — Controle de fluxo e pilha
+- [x] **Fase 2** — Controle de fluxo (branches, JMP/CALL/RET) e pilha
 - [ ] **Fase 3+** — Vídeo, teclado, som, texto/sprites
 - [ ] **Fase 6** — Jogo Snake
 

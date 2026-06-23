@@ -49,6 +49,10 @@ private:
     uint32_t lerMemoria(uint32_t endereco) const;
     void     escreverMemoria(uint32_t endereco, uint32_t valor);
 
+    // Operações de pilha (com checagem de overflow/underflow).
+    void     empilhar(uint32_t valor);
+    uint32_t desempilhar();
+
     // Erros que abortam a execução.
     void erro(const std::string& msg, uint32_t endereco) const;
     void checarAlinhamento(uint32_t endereco) const;

@@ -121,10 +121,10 @@ Cada fase entrega algo testável. Só passar para a próxima quando a atual func
 > destino). Tipo I: `[25:22]=rs, [21:18]=rt`. Em LOAD/STORE o 1º operando é o
 > registrador-base e o 2º é o dado. A VM segue o assembler, não a tabela da spec.
 
-### Fase 2 — Controle de fluxo e pilha
-- Branches (BEQ…BGE), JMP, CALL, RET.
-- PUSH/POP/INC/DEC/NOT + checagem de stack overflow/underflow.
-- Teste: programa com loop e chamada de "função".
+### Fase 2 — Controle de fluxo e pilha ✅
+- [x] Branches (BEQ…BGE), JMP, CALL, RET.
+- [x] PUSH/POP/INC/DEC/NOT + checagem de stack overflow/underflow.
+- [x] Teste `teste_fase2.asm`: loop com branch, PUSH/POP, CALL/RET, NOT (R3=30, SP balanceado).
 
 ### Fase 3 — Vídeo e loop principal
 - Janela SDL2 + textura framebuffer + escala (`--scale`).

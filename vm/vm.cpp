@@ -107,6 +107,27 @@ void VM::escreverMemoria(uint32_t endereco, uint32_t valor) {
 }
 
 // ============================================================================
+// Pilha (cresce para baixo). SP começa em TAM_MEM; o primeiro PUSH escreve em
+// 0x00FFFFFC. Limite inferior é PILHA_BASE (0x00FFF000).
+// ============================================================================
+void VM::empilhar(uint32_t valor) {
+    if (regs[SP] - 4 < (int32_t)PILHA_BASE) {
+        erro("estouro de pilha (Stack Overflow)", regs[SP]);
+    }
+    regs[SP] -= 4;
+    escreverMemoria((uint32_t)regs[SP], valor);
+}
+
+uint32_t VM::desempilhar() {
+    if ((uint32_t)regs[SP] >= TAM_MEM) {
+        erro("pilha vazia (Stack Underflow)", regs[SP]);
+    }
+    uint32_t valor = lerMemoria((uint32_t)regs[SP]);
+    regs[SP] += 4;
+    return valor;
+}
+
+// ============================================================================
 // Ciclo de execução de uma instrução (fetch -> decode -> execute)
 //
 // Fases implementadas:
@@ -134,6 +155,10 @@ void VM::executarInstrucao() {
     // Imediato de 18 bits com sinal (para ADDI/LOAD/STORE).
     int32_t imm18s = (imm18 & 0x20000) ? (int32_t)(imm18 | 0xFFFC0000)
                                        : (int32_t)imm18;
+
+    // Offset de 16 bits com sinal (desvios) e endereço de 26 bits (JMP/CALL).
+    int32_t  off16  = (int16_t)(imm18 & 0xFFFF);
+    uint32_t addr26 = instr & 0x03FFFFFF;
 
     switch (opcode) {
         // ---- Aritmética (com sinal, overflow trunca em 32 bits) ----
@@ -196,6 +221,38 @@ void VM::executarInstrucao() {
             escreverMemoria(ender, (uint32_t)regs[rt]);
             break;
         }
+
+        // ---- Controle de fluxo: desvios condicionais (tipo I) ----
+        // Destino = PC (já incrementado) + offset16*4. Offset com sinal de 16 bits.
+        case 0x11: if (regs[rs] == regs[rt]) regs[PC] += off16 * 4; break; // BEQ
+        case 0x12: if (regs[rs] != regs[rt]) regs[PC] += off16 * 4; break; // BNE
+        case 0x13: if (regs[rs] <  regs[rt]) regs[PC] += off16 * 4; break; // BLT
+        case 0x14: if (regs[rs] >  regs[rt]) regs[PC] += off16 * 4; break; // BGT
+        case 0x15: if (regs[rs] <= regs[rt]) regs[PC] += off16 * 4; break; // BLE
+        case 0x16: if (regs[rs] >= regs[rt]) regs[PC] += off16 * 4; break; // BGE
+
+        // ---- Saltos incondicionais (tipo J): endereço absoluto = addr26*4 ----
+        case 0x17: // JMP
+            regs[PC] = addr26 * 4;
+            break;
+        case 0x18: // CALL: empilha o endereço de retorno (PC já = próxima instrução)
+            empilhar((uint32_t)regs[PC]);
+            regs[PC] = addr26 * 4;
+            break;
+
+        // ---- Unárias e pilha (tipo U) ----
+        case 0x19: // PUSH rd
+            empilhar((uint32_t)regs[rd]);
+            break;
+        case 0x1A: // POP rd
+            regs[rd] = (int32_t)desempilhar();
+            break;
+        case 0x1B: regs[rd] = regs[rd] + 1; break; // INC
+        case 0x1C: regs[rd] = regs[rd] - 1; break; // DEC
+        case 0x1D: regs[rd] = ~regs[rd];      break; // NOT
+        case 0x1E: // RET: desempilha o endereço de retorno
+            regs[PC] = (int32_t)desempilhar();
+            break;
 
         // ---- Sistema ----
         case 0x2B: // HALT
